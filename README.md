@@ -1,18 +1,5 @@
 ## run文件安装方法
-## Install by iStore 
-<img src=https://camo.githubusercontent.com/0a783d7ece59c727a1eef024855606c2b87be6acec14192e8103cf8c601d44eb/68747470733a2f2f63646e2e6a7364656c6976722e6e65742f67682f41554b393532372f4172652d752d6f6b406d61737465722f617070732f696e7374616c6c2e706e67>
 
+进入装有iStoreOS软路由的后台
 
-## Install By Command
-> Like This (Immortalwrt 等其他OpenWrt)
-```bash
-wget -O xxx.run <run下载地址>
-sh xxx.run
-```
-
-## Immortalwrt 如何安装iStore商店
-```
-wget -qO imm.sh https://cafe.cpolar.top/wkdaily/zero3/raw/branch/main/zero3/imm.sh && chmod +x imm.sh && ./imm.sh
-
-```
-
+点击左侧边栏iStore----手动安装----选择或拖放文件到此处----把已下载下来的.run文件上传上去，案后安即可。
