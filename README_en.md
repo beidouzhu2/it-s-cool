@@ -1,4 +1,4 @@
-Installation Method Using the .run File
+## Installation Method Using the .run File
 
 Access the admin panel of your iStoreOS soft router.
 
