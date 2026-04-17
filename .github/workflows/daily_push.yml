@@ -2,7 +2,6 @@ name: 每日提取插件下载链接
 
 on:
   schedule:
-    # 每天北京时间 08:05 自动运行 (此时 UTC 是 00:05)
     - cron: '5 0 * * *'
   workflow_dispatch: 
 
@@ -13,24 +12,32 @@ jobs:
       - name: 提取 Release 链接与标题
         id: get_data
         run: |
-          # 重点：强制使用北京时间生成日期
           TAG_DATE=$(TZ='Asia/Shanghai' date +'%Y-%m-%d')
           REPO="beidouzhu2/it-s-cool"
-          echo "正在检查北京时间今日 Tag: $TAG_DATE"
-
-          # 获取 Release 数据
+          
           RESPONSE=$(curl -s "https://api.github.com/repos/$REPO/releases/tags/$TAG_DATE")
-
-          # 检查 API 是否返回了内容（如果 Tag 不存在，GitHub 会返回 "Not Found"）
           CHECK_EXIST=$(echo "$RESPONSE" | jq -r '.message // empty')
           
           if [ "$CHECK_EXIST" == "Not Found" ]; then
-            echo "错误：仓库中尚未创建 $TAG_DATE 的 Release。"
             echo "found=false" >> $GITHUB_OUTPUT
           else
-            # 解析：文件名: 下载链接
-            # 注意：如果文件名里有特殊字符，这里使用了 jq 的字符串拼接
-            FORMATTED_CONTENT=$(echo "$RESPONSE" | jq -r '.assets[] | "🔹 \(.name):\n\(.browser_download_url)\n"' | sed ':a;N;$!ba;s/\n/%0A/g')
+            # 修改这里的逻辑：
+            # 1. 提取文件名后，通过 shell 处理成你想要的“xx插件”格式
+            # 2. 将标题和链接完全分开
+            
+            # 使用 jq 提取文件名和链接，中间用特殊符号 | 分隔
+            RAW_LIST=$(echo "$RESPONSE" | jq -r '.assets[] | "\(.name)|\(.browser_download_url)"')
+            
+            FORMATTED_CONTENT=""
+            while IFS='|' read -r filename url; do
+              # 提取插件主名称（例如从 ssrpx8664-xxx 提取 ssrp）
+              # 这里假设前四个字母是插件名，你也可以根据需要修改
+              PLUGIN_NAME=$(echo "$filename" | cut -c 1-4)
+              
+              # 组合成：ssrp插件：(换行) 链接 (换行)
+              ITEM="${PLUGIN_NAME}插件：%0A${url}%0A"
+              FORMATTED_CONTENT="${FORMATTED_CONTENT}${ITEM}%0A"
+            done <<< "$RAW_LIST"
             
             echo "content=$FORMATTED_CONTENT" >> $GITHUB_OUTPUT
             echo "tag=$TAG_DATE" >> $GITHUB_OUTPUT
@@ -40,7 +47,8 @@ jobs:
       - name: 推送到 Telegram
         if: steps.get_data.outputs.found == 'true'
         run: |
-          # 构造发送文本
+          # 发送消息
+          # 注意：parse_mode 使用 HTML 模式可以更精准控制，或者继续用 Markdown
           TEXT="📦 *GitHub 插件每日更新* %0A📅 *日期：* ${{ steps.get_data.outputs.tag }}%0A%0A${{ steps.get_data.outputs.content }}"
           
           curl -s -X POST "https://api.telegram.org/bot${{ secrets.TG_BOT_TOKEN }}/sendMessage" \
@@ -48,12 +56,3 @@ jobs:
             -d "text=$TEXT" \
             -d "parse_mode=Markdown" \
             -d "disable_web_page_preview=true"
-
-      - name: 错误提醒
-        if: steps.get_data.outputs.found == 'false'
-        run: |
-          ERROR_MSG="⚠️ *通知* %0A未能在仓库中找到日期为 $(TZ='Asia/Shanghai' date +'%Y-%m-%d') 的 Release，请检查该 Release 是否已发布。"
-          curl -s -X POST "https://api.telegram.org/bot${{ secrets.TG_BOT_TOKEN }}/sendMessage" \
-            -d "chat_id=${{ secrets.TG_CHAT_ID }}" \
-            -d "text=$ERROR_MSG" \
-            -d "parse_mode=Markdown"
