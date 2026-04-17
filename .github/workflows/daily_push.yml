@@ -1,0 +1,50 @@
+name: 每日提取插件下载链接
+
+on:
+  schedule:
+    # 定时任务：每天北京时间 08:05 自动运行 (UTC 00:05)
+    - cron: '5 0 * * *'
+  workflow_dispatch: # 允许你点击按钮手动立即运行
+
+jobs:
+  fetch_and_push:
+    runs-on: ubuntu-latest
+    steps:
+      - name: 提取 Release 链接
+        id: get_data
+        run: |
+          # 1. 生成今日日期 Tag
+          TAG_DATE=$(date +'%Y-%m-%d')
+          REPO="beidouzhu2/it-s-cool"
+          echo "Target Tag: $TAG_DATE"
+
+          # 2. 调用 GitHub API 获取 Release 详情
+          # 使用 -s 隐藏进度条，使用 -f 确保 404 时报错
+          RESPONSE=$(curl -s "https://api.github.com/repos/$REPO/releases/tags/$TAG_DATE")
+
+          # 3. 解析所有下载链接 (browser_download_url)
+          # 使用 jq 将多个链接合并，并用 %0A (换行符) 连接
+          LINKS=$(echo "$RESPONSE" | jq -r '.assets[].browser_download_url')
+
+          if [ -z "$LINKS" ] || [ "$LINKS" == "null" ]; then
+            echo "未找到今日 Release 或无附件。"
+            echo "found=false" >> $GITHUB_OUTPUT
+          else
+            # 格式化链接，准备发送
+            CLEAN_LINKS=$(echo "$LINKS" | sed ':a;N;$!ba;s/\n/%0A/g')
+            echo "links=$CLEAN_LINKS" >> $GITHUB_OUTPUT
+            echo "tag=$TAG_DATE" >> $GITHUB_OUTPUT
+            echo "found=true" >> $GITHUB_OUTPUT
+          fi
+
+      - name: 推送到 Telegram
+        if: steps.get_data.outputs.found == 'true'
+        run: |
+          # 构造发送内容
+          TEXT="📦 *每日插件更新通知*%0A%0A📅 日期：${{ steps.get_data.outputs.tag }}%0A%0A🔗 下载地址：%0A${{ steps.get_data.outputs.links }}"
+          
+          curl -s -X POST "https://api.telegram.org/bot${{ secrets.TG_BOT_TOKEN }}/sendMessage" \
+            -d "chat_id=${{ secrets.TG_CHAT_ID }}" \
+            -d "text=$TEXT" \
+            -d "parse_mode=Markdown" \
+            -d "disable_web_page_preview=true"
