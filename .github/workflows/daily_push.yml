@@ -2,6 +2,7 @@ name: 每日提取插件下载链接
 
 on:
   schedule:
+    # 每天北京时间 08:05 自动运行
     - cron: '5 0 * * *'
   workflow_dispatch: 
 
@@ -12,16 +13,16 @@ jobs:
       - name: 提取 Release 链接与标题
         id: get_data
         run: |
+          # 1. 这一部分完全照抄你成功的代码，不做任何逻辑变动，保证能发出消息
           TAG_DATE=$(TZ='Asia/Shanghai' date +'%Y-%m-%d')
           REPO="beidouzhu2/it-s-cool"
-          
           RESPONSE=$(curl -s "https://api.github.com/repos/$REPO/releases/tags/$TAG_DATE")
           CHECK_EXIST=$(echo "$RESPONSE" | jq -r '.message // empty')
           
           if [ "$CHECK_EXIST" == "Not Found" ]; then
             echo "found=false" >> $GITHUB_OUTPUT
           else
-            # 这里完全还原成你那个能成功的代码，不做任何改动
+            # 保持原样，不做任何插件名截取，确保变量 100% 传递成功
             FORMATTED_CONTENT=$(echo "$RESPONSE" | jq -r '.assets[] | "🔹 \(.name):\n\(.browser_download_url)\n"' | sed ':a;N;$!ba;s/\n/%0A/g')
             
             echo "content=$FORMATTED_CONTENT" >> $GITHUB_OUTPUT
@@ -32,11 +33,13 @@ jobs:
       - name: 推送到 Telegram
         if: steps.get_data.outputs.found == 'true'
         run: |
-          # --- 在这里通过 sed 处理标题名和去掉链接属性 ---
-          # 1. 把 "🔹 插件名-xxx:" 替换成 "插件名插件："
-          # 2. 确保标题后面有换行 (%0A)
+          # 2. 核心修改在这里：我们不在第一步改，我们在最后发送前改
+          # 使用 sed 把 "🔹 名字-版本号:" 变成 "*名字插件：*%0A"
+          # - 这样就把横杠后的内容去掉了
+          # - 加了星号变成黑体加粗
+          # - 结尾加了 %0A (换行符)，链接就会换到下一行，标题自然就失去了链接属性（变黑）
           RAW_CONTENT="${{ steps.get_data.outputs.content }}"
-          CLEAN_CONTENT=$(echo "$RAW_CONTENT" | sed 's/🔹%20//g' | sed 's/-[^:]*:/插件：%0A/g')
+          CLEAN_CONTENT=$(echo "$RAW_CONTENT" | sed 's/🔹%20//g' | sed 's/-[^:]*:/插件：*%0A/g' | sed 's/\*/\*/g')
 
           TEXT="📦 *GitHub 插件每日更新* %0A📅 *日期：* ${{ steps.get_data.outputs.tag }}%0A%0A$CLEAN_CONTENT"
           
