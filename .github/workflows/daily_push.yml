@@ -20,12 +20,10 @@ jobs:
           if [ "$CHECK_EXIST" == "Not Found" ]; then
             echo "found=false" >> $GITHUB_OUTPUT
           else
-            # 【核心策略：回归纯净换行】
-            # 我们不再用 sed 替换 %0A，直接利用 jq 输出真实换行
-            # 并通过 EOF 方式安全地把多行文本存入环境变量
             echo "found=true" >> $GITHUB_OUTPUT
             echo "tag=$TAG_DATE" >> $GITHUB_OUTPUT
             
+            # 使用 HTML 标签 <b> 进行加粗，这样不会干扰 URL 解析
             {
               echo "content<<EOF"
               echo "$RESPONSE" | jq -r '
@@ -38,7 +36,7 @@ jobs:
                  elif $n | contains("ssrp") then "ssrp"
                  elif $n | contains("ssrplus") then "ssrplus"
                  else $n end) as $t |
-                "🔹 \($t)插件：\n\n\($u)\n"
+                "🔹 <b>\($t)插件：</b>\n\($u)\n"
               '
               echo "EOF"
             } >> $GITHUB_OUTPUT
@@ -47,17 +45,15 @@ jobs:
       - name: 推送到 Telegram
         if: steps.get_data.outputs.found == 'true'
         run: |
-          # 构造最终消息
-          # 这里的回车是真实的换行，不再有 %0A
-          TEXT="📦 *GitHub 插件每日更新*
-          📅 *日期：* ${{ steps.get_data.outputs.tag }}
+          # 构造 HTML 格式的消息
+          TEXT="📦 <b>GitHub 插件每日更新</b>
+          📅 <b>日期：</b> ${{ steps.get_data.outputs.tag }}
           
           ${{ steps.get_data.outputs.content }}"
           
-          # 发送时使用 --data-urlencode，它会自动把真实换行转义成电报需要的格式
-          # 这样链接结尾就是干净的，不会再出现 404
+          # 使用 HTML 模式，这是 Telegram 最稳定的模式，不会破坏链接
           curl -s -X POST "https://api.telegram.org/bot${{ secrets.TG_BOT_TOKEN }}/sendMessage" \
             -d "chat_id=${{ secrets.TG_CHAT_ID }}" \
             --data-urlencode "text=$TEXT" \
-            -d "parse_mode=Markdown" \
+            -d "parse_mode=HTML" \
             -d "disable_web_page_preview=true"
