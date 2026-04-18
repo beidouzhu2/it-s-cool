@@ -12,17 +12,30 @@ jobs:
       - name: 提取 Release 链接与标题
         id: get_data
         run: |
-          # 1. 完全保留你原本成功的代码逻辑
           TAG_DATE=$(TZ='Asia/Shanghai' date +'%Y-%m-%d')
           REPO="beidouzhu2/it-s-cool"
+          
           RESPONSE=$(curl -s "https://api.github.com/repos/$REPO/releases/tags/$TAG_DATE")
           CHECK_EXIST=$(echo "$RESPONSE" | jq -r '.message // empty')
           
           if [ "$CHECK_EXIST" == "Not Found" ]; then
             echo "found=false" >> $GITHUB_OUTPUT
           else
-            # 这一行不做任何改动，确保数据能 100% 传到下一步
-            FORMATTED_CONTENT=$(echo "$RESPONSE" | jq -r '.assets[] | "🔹 \(.name):\n\(.browser_download_url)\n"' | sed ':a;N;$!ba;s/\n/%0A/g')
+            # 使用 jq 的 if-elif 逻辑进行多关键词判断
+            # 只要包含关键词，就统一命名格式，并加 \n 强制分行断开链接属性
+            FORMATTED_CONTENT=$(echo "$RESPONSE" | jq -r '
+              .assets[] | 
+              (if .name | contains("passwall") then "passwall"
+               elif .name | contains("openclash") then "openclash"
+               elif .name | contains("ssrplus") then "ssrplus"
+               elif .name | contains("adguardhome") then "AdGuardHome"
+               elif .name | contains("mosdns") then "mosdns"
+               elif .name | contains("smartdns") then "smartdns"
+               elif .name | contains("v2ray") then "v2ray"
+               elif .name | contains("clash") then "clash"
+               else .name end) as $name |
+              "*\($name)插件：*\n\(.browser_download_url)\n"
+            ' | sed ':a;N;$!ba;s/\n/%0A/g')
             
             echo "content=$FORMATTED_CONTENT" >> $GITHUB_OUTPUT
             echo "tag=$TAG_DATE" >> $GITHUB_OUTPUT
@@ -32,17 +45,7 @@ jobs:
       - name: 推送到 Telegram
         if: steps.get_data.outputs.found == 'true'
         run: |
-          # 2. 在这里处理：把标题名弄全，并断开链接属性
-          # 我们把 "🔹 名字-版本号:" 替换成 "*名字插件：*%0A"
-          # 注意：sed 的正则使用了最基础的写法，防止报错
-          RAW_CONTENT="${{ steps.get_data.outputs.content }}"
-          
-          # 处理逻辑：
-          # s/🔹%20//g -> 去掉小方块
-          # s/-[^%]*%3A/插件：*%0A/g -> 把横杠到冒号的内容换成 插件：并强制换行(%0A)
-          CLEAN_CONTENT=$(echo "$RAW_CONTENT" | sed 's/🔹%20//g' | sed 's/-[^%]*%3A/插件：*%0A/g')
-
-          TEXT="📦 *GitHub 插件每日更新* %0A📅 *日期：* ${{ steps.get_data.outputs.tag }}%0A%0A$CLEAN_CONTENT"
+          TEXT="📦 *GitHub 插件每日更新* %0A📅 *日期：* ${{ steps.get_data.outputs.tag }}%0A%0A${{ steps.get_data.outputs.content }}"
           
           curl -s -X POST "https://api.telegram.org/bot${{ secrets.TG_BOT_TOKEN }}/sendMessage" \
             -d "chat_id=${{ secrets.TG_CHAT_ID }}" \
