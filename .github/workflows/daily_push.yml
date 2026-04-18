@@ -9,47 +9,43 @@ jobs:
   fetch_and_push:
     runs-on: ubuntu-latest
     steps:
-      - name: 提取 Release 链接与标题
-        id: get_data
+      - name: 执行提取与推送
+        env:
+          TG_BOT_TOKEN: ${{ secrets.TG_BOT_TOKEN }}
+          TG_CHAT_ID: ${{ secrets.TG_CHAT_ID }}
         run: |
           # 1. 获取北京时间日期
           TAG_DATE=$(TZ='Asia/Shanghai' date +'%Y-%m-%d')
           REPO="beidouzhu2/it-s-cool"
-
-          # 2. 获取数据
-          RESPONSE=$(curl -s "https://api.github.com/repos/$REPO/releases/tags/$TAG_DATE")
-          CHECK_EXIST=$(echo "$RESPONSE" | jq -r '.message // empty')
           
-          if [ "$CHECK_EXIST" == "Not Found" ]; then
-            echo "found=false" >> $GITHUB_OUTPUT
+          # 2. 获取数据并存入临时文件（避免变量溢出）
+          curl -s "https://api.github.com/repos/$REPO/releases/tags/$TAG_DATE" > release_data.json
+          
+          # 3. 检查是否找到 Release
+          if grep -q "Not Found" release_data.json; then
+            TEXT="⚠️ *通知* %0A未能在仓库中找到日期为 $TAG_DATE 的 Release。"
           else
-            # 【这是唯一改动的地方】
-            # 用最原始的方式：提取横杠前的字符作为标题，并加一个 \n 强制换行
-            # 这样标题和链接就分开了，标题就是纯文本，不会带链接属性
-            FORMATTED_CONTENT=$(echo "$RESPONSE" | jq -r '.assets[] | "*\(.name | sub("-.*"; ""))插件：*\n\(.browser_download_url)\n"' | sed ':a;N;$!ba;s/\n/%0A/g')
+            # 4. 提取文件名和链接，用 shell 处理标题
+            # 这种做法最稳，不依赖 jq 的复杂语法
+            RAW_LIST=$(cat release_data.json | jq -r '.assets[] | "\(.name)|\(.browser_download_url)"')
             
-            echo "content=$FORMATTED_CONTENT" >> $GITHUB_OUTPUT
-            echo "tag=$TAG_DATE" >> $GITHUB_OUTPUT
-            echo "found=true" >> $GITHUB_OUTPUT
+            MSG="📦 *GitHub 插件每日更新* %0A📅 *日期：* $TAG_DATE %0A%0A"
+            
+            while IFS='|' read -r filename url; do
+              # 提取第一个横杠前的名字（如 ssrpx8664-xxx -> ssrpx8664）
+              # 如果你想截取更短，可以把下面这行改为 PLUGIN_NAME=$(echo $filename | cut -c 1-4)
+              PLUGIN_NAME=${filename%%-*}
+              
+              # 核心：标题后面加 %0A 强制换行，标题就不会变蓝，且显示全称
+              ITEM="*${PLUGIN_NAME}插件：*%0A${url}%0A%0A"
+              MSG="${MSG}${ITEM}"
+            done <<< "$RAW_LIST"
+            TEXT="$MSG"
           fi
 
-      - name: 推送到 Telegram
-        if: steps.get_data.outputs.found == 'true'
-        run: |
-          # 保持你原本成功的发送结构完全不动
-          TEXT="📦 *GitHub 插件每日更新* %0A📅 *日期：* ${{ steps.get_data.outputs.tag }}%0A%0A${{ steps.get_data.outputs.content }}"
-          
-          curl -s -X POST "https://api.telegram.org/bot${{ secrets.TG_BOT_TOKEN }}/sendMessage" \
-            -d "chat_id=${{ secrets.TG_CHAT_ID }}" \
-            -d "text=$TEXT" \
+          # 5. 使用 --data-urlencode 强制发送，这是处理长文本的终极方案
+          curl -s -X POST "https://api.telegram.org/bot$TG_BOT_TOKEN/sendMessage" \
+            --data-urlencode "chat_id=$TG_CHAT_ID" \
+            --data-urlencode "text=$TEXT" \
             -d "parse_mode=Markdown" \
             -d "disable_web_page_preview=true"
-
-      - name: 错误提醒
-        if: steps.get_data.outputs.found == 'false'
-        run: |
-          ERROR_MSG="⚠️ *通知* %0A未能在仓库中找到日期为 $(TZ='Asia/Shanghai' date +'%Y-%m-%d') 的 Release。"
-          curl -s -X POST "https://api.telegram.org/bot${{ secrets.TG_BOT_TOKEN }}/sendMessage" \
-            -d "chat_id=${{ secrets.TG_CHAT_ID }}" \
-            -d "text=$ERROR_MSG" \
-            -d "parse_mode=Markdown"
