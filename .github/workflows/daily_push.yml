@@ -52,7 +52,7 @@ jobs:
       - name: 推送到 Telegram
         if: steps.get_data.outputs.found == 'true'
         run: |
-          TEXT="📦 <b>iStoreOS-插件每日更新 By Bleki</b>
+          TEXT="📦 <b>iStoreOS 插件每日更新 By Bleki</b>
           📅 <b>日期：</b> ${{ steps.get_data.outputs.tag }}
           
           ${{ steps.get_data.outputs.content }}"
