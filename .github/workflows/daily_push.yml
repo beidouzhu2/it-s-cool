@@ -12,22 +12,17 @@ jobs:
       - name: 提取 Release 链接与标题
         id: get_data
         run: |
+          # 1. 这一段完全、彻底还原成你那个 100% 能收到的版本
           TAG_DATE=$(TZ='Asia/Shanghai' date +'%Y-%m-%d')
           REPO="beidouzhu2/it-s-cool"
-          echo "正在检查北京时间今日 Tag: $TAG_DATE"
-
           RESPONSE=$(curl -s "https://api.github.com/repos/$REPO/releases/tags/$TAG_DATE")
           CHECK_EXIST=$(echo "$RESPONSE" | jq -r '.message // empty')
           
           if [ "$CHECK_EXIST" == "Not Found" ]; then
-            echo "错误：仓库中尚未创建 $TAG_DATE 的 Release。"
             echo "found=false" >> $GITHUB_OUTPUT
           else
-            # 【这是唯一微调的地方】
-            # 我们不截断名字，而是直接把完整名字加粗，并强制跟一个 \n 换行
-            # 这样标题和链接就彻底断开了，标题不会变蓝，且名字是完整的
-            FORMATTED_CONTENT=$(echo "$RESPONSE" | jq -r '.assets[] | "*\(.name)插件：*\n\(.browser_download_url)\n"' | sed ':a;N;$!ba;s/\n/%0A/g')
-            
+            # 保持原样，不做任何逻辑处理，确保变量 100% 成功传递
+            FORMATTED_CONTENT=$(echo "$RESPONSE" | jq -r '.assets[] | "🔹 \(.name):\n\(.browser_download_url)\n"' | sed ':a;N;$!ba;s/\n/%0A/g')
             echo "content=$FORMATTED_CONTENT" >> $GITHUB_OUTPUT
             echo "tag=$TAG_DATE" >> $GITHUB_OUTPUT
             echo "found=true" >> $GITHUB_OUTPUT
@@ -36,8 +31,22 @@ jobs:
       - name: 推送到 Telegram
         if: steps.get_data.outputs.found == 'true'
         run: |
-          # 这一步完全维持你成功的原样
-          TEXT="📦 *GitHub 插件每日更新* %0A📅 *日期：* ${{ steps.get_data.outputs.tag }}%0A%0A${{ steps.get_data.outputs.content }}"
+          # 2. 我们在这里通过 sed 处理文字，不影响变量传输
+          # 逻辑：
+          # a. 把 "🔹 名字-版本号:" 统一改成 "名字插件："
+          # b. 在冒号后面强行加 %0A (换行)，让标题变黑（断开链接属性）
+          RAW_CONTENT="${{ steps.get_data.outputs.content }}"
+          
+          # 这里的 sed 会把类似 "passwall-xxx:" 替换为 "passwall插件：%0A"
+          # 注意：这里只处理 passwall, openclash 等常见词，你可以继续加
+          CLEAN_CONTENT=$(echo "$RAW_CONTENT" | \
+            sed 's/🔹%20//g' | \
+            sed 's/passwall[^%]*%3A/passwall插件：%0A/g' | \
+            sed 's/openclash[^%]*%3A/openclash插件：%0A/g' | \
+            sed 's/ssrplus[^%]*%3A/ssrplus插件：%0A/g' | \
+            sed 's/luci-app-[^%]*%3A/插件：%0A/g')
+
+          TEXT="📦 *GitHub 插件每日更新* %0A📅 *日期：* ${{ steps.get_data.outputs.tag }}%0A%0A$CLEAN_CONTENT"
           
           curl -s -X POST "https://api.telegram.org/bot${{ secrets.TG_BOT_TOKEN }}/sendMessage" \
             -d "chat_id=${{ secrets.TG_CHAT_ID }}" \
