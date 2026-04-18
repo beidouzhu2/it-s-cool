@@ -2,7 +2,7 @@ name: 每日提取插件下载链接
 
 on:
   schedule:
-    # 每天北京时间 08:05 自动运行 (此时 UTC 是 00:05)
+    # 每天北京时间 08:05 自动运行 (UTC 00:05)
     - cron: '5 0 * * *'
   workflow_dispatch: 
 
@@ -13,39 +13,53 @@ jobs:
       - name: 提取 Release 链接与标题
         id: get_data
         run: |
+          # 1. 获取北京时间日期
           TAG_DATE=$(TZ='Asia/Shanghai' date +'%Y-%m-%d')
           REPO="beidouzhu2/it-s-cool"
-          
+          echo "Checking release for: $TAG_DATE"
+
+          # 2. 调用 GitHub API
           RESPONSE=$(curl -s "https://api.github.com/repos/$REPO/releases/tags/$TAG_DATE")
-          CHECK_EXIST=$(echo "$RESPONSE" | jq -r '.message // empty')
           
-          if [ "$CHECK_EXIST" == "Not Found" ]; then
+          # 3. 检查 Tag 是否存在
+          if echo "$RESPONSE" | jq -e '.message == "Not Found"' > /dev/null; then
             echo "found=false" >> $GITHUB_OUTPUT
           else
-            # 修改点 1：将图标改为 ❤️，并使用反引号包裹链接以去除超链接点击属性
-            FORMATTED_CONTENT=$(echo "$RESPONSE" | jq -r '.assets[] | "❤️ \(.name):\n`\(.browser_download_url)`\n"' | sed ':a;N;$!ba;s/\n/%0A/g')
+            # 4. 提取内容：❤️ 图标 + 文件名 + `链接`
+            # 使用 jq 直接格式化，不使用 sed 以免破坏转义
+            CONTENT=$(echo "$RESPONSE" | jq -r '.assets[] | "❤️ \(.name):\n`\(.browser_download_url)`\n"')
             
-            echo "content=$FORMATTED_CONTENT" >> $GITHUB_OUTPUT
-            echo "tag=$TAG_DATE" >> $GITHUB_OUTPUT
+            # 5. 使用 EOF 安全写入多行输出，防止 Exit Code 127
             echo "found=true" >> $GITHUB_OUTPUT
+            echo "tag=$TAG_DATE" >> $GITHUB_OUTPUT
+            echo "content<<EOF" >> $GITHUB_OUTPUT
+            echo "$CONTENT" >> $GITHUB_OUTPUT
+            echo "EOF" >> $GITHUB_OUTPUT
           fi
 
-      - name: 推送到 Telegram
+      - name: 推送到 Telegram (成功)
         if: steps.get_data.outputs.found == 'true'
         run: |
-          # 构造发送文本，确保使用 Markdown 模式
-          TEXT="📦 *GitHub 插件每日更新* %0A📅 *日期：* ${{ steps.get_data.outputs.tag }}%0A%0A${{ steps.get_data.outputs.content }}"
-          
-          curl -s -X POST "https://api.telegram.org/bot${{ secrets.TG_BOT_TOKEN }}/sendMessage" \
-            -d "chat_id=${{ secrets.TG_CHAT_ID }}" \
-            -d "text=$TEXT" \
-            -d "parse_mode=Markdown" \
-            -d "disable_web_page_preview=true"
+          # 构造最终发送的消息体
+          # 注意：Telegram API 传参时换行符需要处理，这里使用 --data-urlencode 更安全
+          MESSAGE=$(cat <<EOF
+          📦 *GitHub 插件每日更新*
+          📅 *日期：* ${{ steps.get_data.outputs.tag }}
 
-      - name: 错误提醒
+          ${{ steps.get_data.outputs.content }}
+          EOF
+          )
+
+          curl -s -X POST "https://api.telegram.org/bot${{ secrets.TG_BOT_TOKEN }}/sendMessage" \
+            --data-urlencode "chat_id=${{ secrets.TG_CHAT_ID }}" \
+            --data-urlencode "text=$MESSAGE" \
+            --data-urlencode "parse_mode=Markdown" \
+            --data-urlencode "disable_web_page_preview=true"
+
+      - name: 错误提醒 (失败)
         if: steps.get_data.outputs.found == 'false'
         run: |
-          ERROR_MSG="⚠️ *通知* %0A未能在仓库中找到日期为 $(TZ='Asia/Shanghai' date +'%Y-%m-%d') 的 Release。"
+          ERROR_MSG="⚠️ *通知* %0A未能在仓库中找到日期为 $(TZ='Asia/Shanghai' date +'%Y-%m-%d') 的 Release，请手动检查。"
           curl -s -X POST "https://api.telegram.org/bot${{ secrets.TG_BOT_TOKEN }}/sendMessage" \
             -d "chat_id=${{ secrets.TG_CHAT_ID }}" \
             -d "text=$ERROR_MSG" \
