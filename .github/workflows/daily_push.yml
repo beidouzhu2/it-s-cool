@@ -20,9 +20,23 @@ jobs:
           if [ "$CHECK_EXIST" == "Not Found" ]; then
             echo "found=false" >> $GITHUB_OUTPUT
           else
-            # 继续使用你那个能成功的 jq 原始拼接逻辑，不做逻辑改动，只改符号
-            # 我们给标题套上 * (加粗)，并多加一个 \n 确保物理隔离
-            FORMATTED_CONTENT=$(echo "$RESPONSE" | jq -r '.assets[] | "*🔹 \(.name):*\n\n\(.browser_download_url)\n"' | sed ':a;N;$!ba;s/\n/%0A/g')
+            # 【核心改进】
+            # 1. 在 jq 内部提前算好标题 ($t)，只对文件名进行清洗。
+            # 2. 不管链接 ($u) 怎么变，我们原封不动输出链接。
+            # 3. 标题加粗，后面跟两个回车，确保标题不变蓝。
+            FORMATTED_CONTENT=$(echo "$RESPONSE" | jq -r '
+              .assets[] | 
+              .name as $n | .browser_download_url as $u |
+              (if $n | contains("passwall2") then "passwall2"
+               elif $n | contains("passwall") then "passwall"
+               elif $n | contains("openclash") then "openclash"
+               elif $n | contains("AdGuardHome") then "AdGuardHome"
+               elif $n | contains("ssrp") then "ssrp"
+               elif $n | contains("ssrplus") then "ssrplus"
+               else $n end) as $t |
+              "*🔹 \($t)插件：*\n\n\($u)\n"
+            ' | sed ':a;N;$!ba;s/\n/%0A/g')
+            
             echo "content=$FORMATTED_CONTENT" >> $GITHUB_OUTPUT
             echo "tag=$TAG_DATE" >> $GITHUB_OUTPUT
             echo "found=true" >> $GITHUB_OUTPUT
@@ -31,22 +45,8 @@ jobs:
       - name: 推送到 Telegram
         if: steps.get_data.outputs.found == 'true'
         run: |
-          # 拿回原始数据
-          RAW_CONTENT="${{ steps.get_data.outputs.content }}"
-          
-          # 【精准美容手术】
-          # 1. 匹配 passwall/openclash/AdGuardHome/ssrp/ssrplus 等关键词
-          # 2. 将它们统一格式化为 "名字插件："
-          # 3. 这里的 sed 逻辑不影响消息发送，只会美化文字
-          CLEAN_CONTENT=$(echo "$RAW_CONTENT" | \
-            sed -E 's/AdGuardHome[^:]*/AdGuardHome插件/g' | \
-            sed -E 's/openclash[^:]*/openclash插件/g' | \
-            sed -E 's/passwall2[^:]*/passwall2插件/g' | \
-            sed -E 's/passwall[^2:][^:]*/passwall插件/g' | \
-            sed -E 's/ssrplus[^:]*/ssrplus插件/g' | \
-            sed -E 's/ssrp[^:]*/ssrp插件/g')
-
-          TEXT="📦 *GitHub 插件每日更新* %0A📅 *日期：* ${{ steps.get_data.outputs.tag }}%0A%0A$CLEAN_CONTENT"
+          # 这一步现在变得非常干净，直接发送就行
+          TEXT="📦 *GitHub 插件每日更新* %0A📅 *日期：* ${{ steps.get_data.outputs.tag }}%0A%0A${{ steps.get_data.outputs.content }}"
           
           curl -s -X POST "https://api.telegram.org/bot${{ secrets.TG_BOT_TOKEN }}/sendMessage" \
             -d "chat_id=${{ secrets.TG_CHAT_ID }}" \
