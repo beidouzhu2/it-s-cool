@@ -23,9 +23,8 @@ jobs:
             echo "found=true" >> $GITHUB_OUTPUT
             echo "tag=$TAG_DATE" >> $GITHUB_OUTPUT
             
-            # 【逻辑升级】
-            # 1. 识别插件名称 ($t)
-            # 2. 识别架构类型 ($a): 包含 aarch 记为 Arm架构，包含 x86 记为 x86架构
+            # 【图标更新】
+            # 将 🔹 替换为 🔴
             {
               echo "content<<EOF"
               echo "$RESPONSE" | jq -r '
@@ -43,7 +42,7 @@ jobs:
                 (if $n | contains("aarch") then " (Arm架构)"
                  elif $n | contains("x86") then " (x86架构)"
                  else "" end) as $a |
-                "🔹 <b>\($t)插件\($a)：</b>\n\($u)\n"
+                "🔴 <b>\($t)插件\($a)：</b>\n\($u)\n"
               '
               echo "EOF"
             } >> $GITHUB_OUTPUT
