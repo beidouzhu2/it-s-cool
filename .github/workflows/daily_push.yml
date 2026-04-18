@@ -14,21 +14,19 @@ jobs:
         run: |
           TAG_DATE=$(TZ='Asia/Shanghai' date +'%Y-%m-%d')
           REPO="beidouzhu2/it-s-cool"
-          
+          echo "正在检查北京时间今日 Tag: $TAG_DATE"
+
           RESPONSE=$(curl -s "https://api.github.com/repos/$REPO/releases/tags/$TAG_DATE")
           CHECK_EXIST=$(echo "$RESPONSE" | jq -r '.message // empty')
           
           if [ "$CHECK_EXIST" == "Not Found" ]; then
+            echo "错误：仓库中尚未创建 $TAG_DATE 的 Release。"
             echo "found=false" >> $GITHUB_OUTPUT
           else
-            # 【核心策略：先提取全名，再用最稳的 sed 批量格式化标题】
-            # 1. jq 只负责取出 "文件名|链接"
-            # 2. 第一个 sed 把 "名字-版本号|链接" 变成 "*名字插件：*\n链接"
-            # 3. 第二个 sed 负责把 \n 转义成 Telegram 的 %0A
-            FORMATTED_CONTENT=$(echo "$RESPONSE" | jq -r '.assets[] | "\(.name)|\(.browser_download_url)"' | \
-            sed 's/-[^|]*|/插件：*\n/g' | \
-            sed 's/^/*/g' | \
-            sed ':a;N;$!ba;s/\n/%0A/g')
+            # 【这是唯一微调的地方】
+            # 我们不截断名字，而是直接把完整名字加粗，并强制跟一个 \n 换行
+            # 这样标题和链接就彻底断开了，标题不会变蓝，且名字是完整的
+            FORMATTED_CONTENT=$(echo "$RESPONSE" | jq -r '.assets[] | "*\(.name)插件：*\n\(.browser_download_url)\n"' | sed ':a;N;$!ba;s/\n/%0A/g')
             
             echo "content=$FORMATTED_CONTENT" >> $GITHUB_OUTPUT
             echo "tag=$TAG_DATE" >> $GITHUB_OUTPUT
@@ -38,6 +36,7 @@ jobs:
       - name: 推送到 Telegram
         if: steps.get_data.outputs.found == 'true'
         run: |
+          # 这一步完全维持你成功的原样
           TEXT="📦 *GitHub 插件每日更新* %0A📅 *日期：* ${{ steps.get_data.outputs.tag }}%0A%0A${{ steps.get_data.outputs.content }}"
           
           curl -s -X POST "https://api.telegram.org/bot${{ secrets.TG_BOT_TOKEN }}/sendMessage" \
