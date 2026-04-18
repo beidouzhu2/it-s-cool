@@ -23,12 +23,15 @@ jobs:
             echo "found=true" >> $GITHUB_OUTPUT
             echo "tag=$TAG_DATE" >> $GITHUB_OUTPUT
             
-            # 使用 HTML 标签 <b> 进行加粗，这样不会干扰 URL 解析
+            # 【逻辑升级】
+            # 1. 识别插件名称 ($t)
+            # 2. 识别架构类型 ($a): 包含 aarch 记为 Arm架构，包含 x86 记为 x86架构
             {
               echo "content<<EOF"
               echo "$RESPONSE" | jq -r '
                 .assets[] | 
                 .name as $n | .browser_download_url as $u |
+                # 判断插件名
                 (if $n | contains("passwall2") then "passwall2"
                  elif $n | contains("passwall") then "passwall"
                  elif $n | contains("openclash") then "openclash"
@@ -36,7 +39,11 @@ jobs:
                  elif $n | contains("ssrp") then "ssrp"
                  elif $n | contains("ssrplus") then "ssrplus"
                  else $n end) as $t |
-                "🔹 <b>\($t)插件：</b>\n\($u)\n"
+                # 判断架构名
+                (if $n | contains("aarch") then " (Arm架构)"
+                 elif $n | contains("x86") then " (x86架构)"
+                 else "" end) as $a |
+                "🔹 <b>\($t)插件\($a)：</b>\n\($u)\n"
               '
               echo "EOF"
             } >> $GITHUB_OUTPUT
@@ -45,13 +52,11 @@ jobs:
       - name: 推送到 Telegram
         if: steps.get_data.outputs.found == 'true'
         run: |
-          # 构造 HTML 格式的消息
           TEXT="📦 <b>GitHub 插件每日更新</b>
           📅 <b>日期：</b> ${{ steps.get_data.outputs.tag }}
           
           ${{ steps.get_data.outputs.content }}"
           
-          # 使用 HTML 模式，这是 Telegram 最稳定的模式，不会破坏链接
           curl -s -X POST "https://api.telegram.org/bot${{ secrets.TG_BOT_TOKEN }}/sendMessage" \
             -d "chat_id=${{ secrets.TG_CHAT_ID }}" \
             --data-urlencode "text=$TEXT" \
