@@ -20,10 +20,9 @@ jobs:
           if [ "$CHECK_EXIST" == "Not Found" ]; then
             echo "found=false" >> $GITHUB_OUTPUT
           else
-            # 【核心改进】
-            # 1. 在 jq 内部提前算好标题 ($t)，只对文件名进行清洗。
-            # 2. 不管链接 ($u) 怎么变，我们原封不动输出链接。
-            # 3. 标题加粗，后面跟两个回车，确保标题不变蓝。
+            # 【终极简洁版】
+            # 1. 去掉所有可能引起误会的 * 星号，改用更显眼的 Emoji 🔹
+            # 2. 确保标题和链接之间有两个换行（%0A%0A），物理断开链接属性，让标题变黑
             FORMATTED_CONTENT=$(echo "$RESPONSE" | jq -r '
               .assets[] | 
               .name as $n | .browser_download_url as $u |
@@ -34,7 +33,7 @@ jobs:
                elif $n | contains("ssrp") then "ssrp"
                elif $n | contains("ssrplus") then "ssrplus"
                else $n end) as $t |
-              "*🔹 \($t)插件：*\n\n\($u)\n"
+              "🔹 \($t)插件：\n\n\($u)\n"
             ' | sed ':a;N;$!ba;s/\n/%0A/g')
             
             echo "content=$FORMATTED_CONTENT" >> $GITHUB_OUTPUT
@@ -45,7 +44,7 @@ jobs:
       - name: 推送到 Telegram
         if: steps.get_data.outputs.found == 'true'
         run: |
-          # 这一步现在变得非常干净，直接发送就行
+          # 使用 Markdown 模式，但不再给变量内容手动加星号
           TEXT="📦 *GitHub 插件每日更新* %0A📅 *日期：* ${{ steps.get_data.outputs.tag }}%0A%0A${{ steps.get_data.outputs.content }}"
           
           curl -s -X POST "https://api.telegram.org/bot${{ secrets.TG_BOT_TOKEN }}/sendMessage" \
