@@ -13,7 +13,7 @@ jobs:
       - name: 提取 Release 链接与标题
         id: get_data
         run: |
-          # 1. 强制北京时间日期
+          # 1. 获取日期
           TAG_DATE=$(TZ='Asia/Shanghai' date +'%Y-%m-%d')
           REPO="beidouzhu2/it-s-cool"
           
@@ -23,10 +23,10 @@ jobs:
           if [ "$CHECK_EXIST" == "Not Found" ]; then
             echo "found=false" >> $GITHUB_OUTPUT
           else
-            # 【核心修改区】
-            # split("-")[0] 提取横杠前的全名（如 openclash）
-            # \n 确保标题和链接分行，这样标题就是纯文本，不会带链接属性
-            FORMATTED_CONTENT=$(echo "$RESPONSE" | jq -r '.assets[] | "*\(.name | split("-")[0])插件：*\n\(.browser_download_url)\n"' | sed ':a;N;$!ba;s/\n/%0A/g')
+            # 【核心修正】
+            # 不使用 split，改用简单的正则截取第一个横杠前的内容
+            # 并在标题和链接之间强制换行，确保标题是纯文本
+            FORMATTED_CONTENT=$(echo "$RESPONSE" | jq -r '.assets[] | "*\(.name | sub("-.*"; ""))插件：*\n\(.browser_download_url)\n"' | sed ':a;N;$!ba;s/\n/%0A/g')
             
             echo "content=$FORMATTED_CONTENT" >> $GITHUB_OUTPUT
             echo "tag=$TAG_DATE" >> $GITHUB_OUTPUT
@@ -36,6 +36,7 @@ jobs:
       - name: 推送到 Telegram
         if: steps.get_data.outputs.found == 'true'
         run: |
+          # 引用您之前成功的发送结构
           TEXT="📦 *GitHub 插件每日更新* %0A📅 *日期：* ${{ steps.get_data.outputs.tag }}%0A%0A${{ steps.get_data.outputs.content }}"
           
           curl -s -X POST "https://api.telegram.org/bot${{ secrets.TG_BOT_TOKEN }}/sendMessage" \
