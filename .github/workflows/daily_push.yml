@@ -20,12 +20,13 @@ jobs:
           if [ "$CHECK_EXIST" == "Not Found" ]; then
             echo "found=false" >> $GITHUB_OUTPUT
           else
-            # 【终极简洁版】
-            # 1. 去掉所有可能引起误会的 * 星号，改用更显眼的 Emoji 🔹
-            # 2. 确保标题和链接之间有两个换行（%0A%0A），物理断开链接属性，让标题变黑
+            # 【清洗链接逻辑】
+            # 1. gsub(" "; "") 确保链接里绝对没有空格
+            # 2. 依然保持标题与链接之间的双换行，确保标题变黑
+            # 3. 链接末尾只留一个换行，防止 sed 处理时带入多余字符
             FORMATTED_CONTENT=$(echo "$RESPONSE" | jq -r '
               .assets[] | 
-              .name as $n | .browser_download_url as $u |
+              .name as $n | (.browser_download_url | gsub(" "; "")) as $u |
               (if $n | contains("passwall2") then "passwall2"
                elif $n | contains("passwall") then "passwall"
                elif $n | contains("openclash") then "openclash"
@@ -44,11 +45,12 @@ jobs:
       - name: 推送到 Telegram
         if: steps.get_data.outputs.found == 'true'
         run: |
-          # 使用 Markdown 模式，但不再给变量内容手动加星号
+          # 增加 --data-urlencode，这是解决 404 跳转问题的终极方案
+          # 它能确保所有的 %0A 正确地被 Telegram 服务器解析，而不会被误认为是 URL 里的字符
           TEXT="📦 *GitHub 插件每日更新* %0A📅 *日期：* ${{ steps.get_data.outputs.tag }}%0A%0A${{ steps.get_data.outputs.content }}"
           
           curl -s -X POST "https://api.telegram.org/bot${{ secrets.TG_BOT_TOKEN }}/sendMessage" \
+            --data-urlencode "text=$TEXT" \
             -d "chat_id=${{ secrets.TG_CHAT_ID }}" \
-            -d "text=$TEXT" \
             -d "parse_mode=Markdown" \
             -d "disable_web_page_preview=true"
