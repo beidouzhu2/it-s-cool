@@ -42,7 +42,7 @@ jobs:
                 (if $n | contains("aarch") then " (Arm架构)"
                  elif $n | contains("x86") then " (x86架构)"
                  else "" end) as $a |
-                "🔴 <b>\($t)插件\($a)：</b>\n\($u)\n"
+                "♦️ <b>\($t)插件\($a)：</b>\n\($u)\n"
               '
               echo "EOF"
             } >> $GITHUB_OUTPUT
