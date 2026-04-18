@@ -21,21 +21,14 @@ jobs:
           if [ "$CHECK_EXIST" == "Not Found" ]; then
             echo "found=false" >> $GITHUB_OUTPUT
           else
-            # 使用 jq 的 if-elif 逻辑进行多关键词判断
-            # 只要包含关键词，就统一命名格式，并加 \n 强制分行断开链接属性
-            FORMATTED_CONTENT=$(echo "$RESPONSE" | jq -r '
-              .assets[] | 
-              (if .name | contains("passwall") then "passwall"
-               elif .name | contains("openclash") then "openclash"
-               elif .name | contains("ssrplus") then "ssrplus"
-               elif .name | contains("adguardhome") then "AdGuardHome"
-               elif .name | contains("mosdns") then "mosdns"
-               elif .name | contains("smartdns") then "smartdns"
-               elif .name | contains("v2ray") then "v2ray"
-               elif .name | contains("clash") then "clash"
-               else .name end) as $name |
-              "*\($name)插件：*\n\(.browser_download_url)\n"
-            ' | sed ':a;N;$!ba;s/\n/%0A/g')
+            # 【核心策略：先提取全名，再用最稳的 sed 批量格式化标题】
+            # 1. jq 只负责取出 "文件名|链接"
+            # 2. 第一个 sed 把 "名字-版本号|链接" 变成 "*名字插件：*\n链接"
+            # 3. 第二个 sed 负责把 \n 转义成 Telegram 的 %0A
+            FORMATTED_CONTENT=$(echo "$RESPONSE" | jq -r '.assets[] | "\(.name)|\(.browser_download_url)"' | \
+            sed 's/-[^|]*|/插件：*\n/g' | \
+            sed 's/^/*/g' | \
+            sed ':a;N;$!ba;s/\n/%0A/g')
             
             echo "content=$FORMATTED_CONTENT" >> $GITHUB_OUTPUT
             echo "tag=$TAG_DATE" >> $GITHUB_OUTPUT
