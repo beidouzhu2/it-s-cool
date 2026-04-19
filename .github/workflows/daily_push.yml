@@ -2,7 +2,7 @@ name: 每日提取插件下载链接
 
 on:
   schedule:
-    - cron: '5 0 * * *'
+    - cron: '5 1 * * *'
   workflow_dispatch: 
 
 jobs:
