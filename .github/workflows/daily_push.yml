@@ -1,8 +1,8 @@
-name: 每日提取插件下载链接
+name: 每周提取插件下载链接
 
 on:
   schedule:
-    - cron: '5 1 * * *'
+    - cron: '5 1 * * 1'
   workflow_dispatch: 
 
 jobs:
@@ -50,7 +50,7 @@ jobs:
       - name: 推送到 Telegram
         if: steps.get_data.outputs.found == 'true'
         run: |
-          TEXT="⭐️ <b>iStoreOS👉插件每日更新✨By Bleki</b>
+          TEXT="⭐️ <b>iStoreOS👉插件每周更新✨By Bleki</b>
             <b>                日期：</b> ${{ steps.get_data.outputs.tag }}
           
           ${{ steps.get_data.outputs.content }}"
