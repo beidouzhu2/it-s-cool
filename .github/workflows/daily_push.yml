@@ -29,8 +29,8 @@ jobs:
                 .assets[] | 
                 .name as $n | .browser_download_url as $u |
                 # 判断插件名
-                (if $n | contains("passwall") then "passwall"
-                 elif $n | contains("passwall2") then "passwall2"
+                (if $n | contains("passwall2") then "passwall2"
+                 elif $n | contains("passwall") then "passwall"
                  elif $n | contains("openclash") then "openclash"
                  elif $n | contains("AdGuardHome") then "AdGuardHome"
                  elif $n | contains("ssrp") then "ssrp"
