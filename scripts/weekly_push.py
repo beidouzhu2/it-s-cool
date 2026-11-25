@@ -78,6 +78,34 @@ def arch(name):
         return "x86（请核对）"
     return "架构请核对文件名"
 
+def plugin_name(name):
+    low = name.lower()
+    for key, label in (
+        ("passwall2", "passwall2"), ("passwall", "passwall"),
+        ("openclash", "openclash"), ("adguardhome", "AdGuardHome"),
+        ("ssrp", "ssrp"), ("ssrplus", "ssrplus"),
+        ("shadowsocksr", "ssrplus"), ("quickfile", "Quickfile"),
+        ("daede", "DAEDE"), ("dae", "DAE"), ("sing-box", "sing-box"),
+        ("xray-core", "Xray Core"), ("openlist", "OpenList"),
+        ("homeproxy", "HomeProxy"), ("mosdns", "MosDNS"),
+        ("clashoo", "Clashoo"), ("nikki", "Nikki"),
+        ("momo", "Momo"), ("argon", "Argon"), ("dufs", "Dufs"),
+        ("uninstall", "AdvanceUninstall"), ("istore", "iStore"),
+    ):
+        if key in low:
+            return html.escape(label)
+    return "<code>" + html.escape(name.removesuffix(".run")) + "</code>"
+
+def classic_arch(name):
+    value = arch(name)
+    return {
+        "ARM64 / Cortex-A53": "Arm64架构 / Cortex-A53",
+        "ARM64 / Generic": "Arm64架构 / Generic",
+        "ARM64": "Arm64架构",
+        "ARM32": "Arm32架构",
+        "x86_64": "x86架构",
+    }.get(value, value)
+
 def classify(found):
     groups = {k: [] for k, _ in FAMILIES}
     for family, (date, assets) in found.items():
@@ -99,10 +127,17 @@ def render(today, found):
             messages.append(header + "最近 8 个日历日没有可用安装包；请检查构建结果。")
             continue
         for date, source, a in entries:
-            name = html.escape(a["name"])
+            name = plugin_name(a["name"])
             url = html.escape(a["browser_download_url"], quote=True)
-            stamp = date if date == today.isoformat() else date + "（历史构建）"
-            line = f"♦️ <code>{name}</code>\n{html.escape(arch(a['name']))} · {html.escape(source)} · {stamp}\n<a href=\"{url}\">点击下载 .run</a>\n\n"
+            stamp = "" if date == today.isoformat() else f"构建日期：{date}（历史构建）\n"
+            compatibility = f"适用系统：{html.escape(source)}\n" if group == "CORE" else ""
+            kind = "" if group == "CORE" else "插件"
+            title = f"{name}{kind} ({html.escape(classic_arch(a['name']))})："
+            if name.startswith("<code>"):
+                title = f"{name}{kind} ({html.escape(classic_arch(a['name']))})："
+                line = f"♦️ {title}\n{compatibility}{stamp}{url}\n\n"
+            else:
+                line = f"♦️ <b>{title}</b>\n{compatibility}{stamp}{url}\n\n"
             if units(header + line) > LIMIT:
                 raise RuntimeError("Asset entry too long")
             if units(chunk + line) > LIMIT:
@@ -141,9 +176,10 @@ def self_test():
     assert len(msgs) > 3 and all(units(m) <= LIMIT for m in msgs)
     assert any("历史构建" in m and "25-openclash" in m for m in msgs)
     assert any("Cortex-A53" in m for m in msgs)
-    assert any("<code>openclash-x86-64.run</code>" in m for m in msgs)
-    assert any('">点击下载 .run</a>' in m for m in msgs)
-    assert not any("<b>openclash-x86-64.run</b>" in m for m in msgs)
+    assert any("<b>openclash插件 (x86架构)：</b>" in m for m in msgs)
+    assert any("https://github.com/example/repo/releases/download/test/openclash-x86-64.run" in m for m in msgs)
+    assert not any("点击下载 .run" in m or "<a href=" in m for m in msgs)
+    assert plugin_name("Passwall2_x86_64.run") == "passwall2"
     assert len(render(today, collect(today, lambda _: []))) == 3
     print("Classification, date fallback, missing-family notices and message chunking passed")
 
