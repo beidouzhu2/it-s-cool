@@ -1,0 +1,37 @@
+name: One-time classic Telegram preview
+on:
+  push:
+    branches:
+      - 'test/telegram-classic-preview'
+    paths:
+      - '.github/workflows/telegram-classic-preview.yml'
+permissions:
+  contents: read
+jobs:
+  preview:
+    runs-on: ubuntu-latest
+    if: github.ref_name == 'test/telegram-classic-preview'
+    steps:
+      - uses: actions/checkout@v6
+        with:
+          persist-credentials: false
+      - name: Send classic IPK preview
+        env:
+          GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+          TG_BOT_TOKEN: ${{ secrets.TG_BOT_TOKEN }}
+          TG_CHAT_ID: ${{ secrets.TG_CHAT_ID }}
+        run: |
+          python3 - <<'PY'
+          import sys
+          sys.path.insert(0, "scripts")
+          import weekly_push as w
+          today = w.dt.datetime.now(w.ZoneInfo("Asia/Shanghai")).date()
+          found = w.collect(today)
+          if not found["IPK"][1]:
+              raise SystemExit("No IPK assets")
+          found = {"IPK": found["IPK"]}
+          messages = w.render(today, found)
+          previews = [m for m in messages if w.TITLES["IPK"] in m]
+          print(f"IPK assets: {len(found['IPK'][1])}")
+          w.send(previews)
+          PY
