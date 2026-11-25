@@ -118,8 +118,16 @@ def send(messages):
         try:
             with urllib.request.urlopen("https://api.telegram.org/bot" + os.environ["TG_BOT_TOKEN"] + "/sendMessage", data=data, timeout=30) as resp:
                 result = json.load(resp)
+        except urllib.error.HTTPError as exc:
+            try:
+                error = json.load(exc)
+                description = str(error.get("description", ""))
+            except Exception:
+                description = ""
+            print(f"Telegram HTTP {exc.code}: {description.replace(os.environ['TG_BOT_TOKEN'], '***')}")
+            raise SystemExit("Telegram HTTP error")
         except (urllib.error.URLError, TimeoutError):
-            raise SystemExit("Telegram request failed")
+            raise SystemExit("Telegram network request failed")
         if not result.get("ok"):
             raise SystemExit("Telegram rejected message")
     print(f"Sent {len(messages)} categorized message(s)")
@@ -163,7 +171,7 @@ def main():
     if args.dry_run:
         print(f"Dry run: {len(messages)} messages; no Telegram delivery")
     else:
-        send(messages)
+        send(messages[:1])
 
 if __name__ == "__main__":
     main()
