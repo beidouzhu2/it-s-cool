@@ -13,6 +13,9 @@ on:
     - cron: "8 22 * * *"  # 北京时间早上 6 点 08
   workflow_dispatch:
 
+permissions:
+  contents: write
+
 jobs:
   build:
     runs-on: ubuntu-22.04
@@ -22,7 +25,7 @@ jobs:
         run: mkdir -p OpenClash openclash-x86 openclash-a53
         
       - name: Checkout package branch to OpenClash directory
-        uses: actions/checkout@v4
+        uses: actions/checkout@v6
         with:
           repository: vernesong/OpenClash
           path: OpenClash
@@ -43,7 +46,7 @@ jobs:
         run: mkdir Meta
       
       - name: Checkout core branch to Meta directory
-        uses: actions/checkout@v4
+        uses: actions/checkout@v6
         with:
           repository: vernesong/OpenClash
           path: Meta
@@ -104,7 +107,8 @@ jobs:
           echo "tag_name=$TODAY" >> $GITHUB_ENV
 
       - name: Upload run files as release assets
-        uses: softprops/action-gh-release@v2.1.0
+        if: github.ref_name == 'daily'
+        uses: softprops/action-gh-release@v3
         with:
           tag_name: ${{ env.tag_name }}
           name: "Daily Build - ${{ env.tag_name }}"
