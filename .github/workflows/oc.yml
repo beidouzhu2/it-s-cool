@@ -1,5 +1,5 @@
 #=================================================
-# https://github.com/wukongdaily/RunFilesBuilder
+# https://github.com/wkccd/dailybuild
 # Description: Build RunFiles using GitHub Actions
 # Lisence: MIT
 # Author: wukongdaily
@@ -106,6 +106,15 @@ jobs:
           TODAY=$(date -u -d '+8 hour' +'%Y-%m-%d')
           echo "tag_name=$TODAY" >> $GITHUB_ENV
 
+      - name: Upload test artifact
+        if: github.ref_name != 'daily'
+        uses: actions/upload-artifact@v4
+        with:
+          name: test-oc
+          path: makeself/*.run
+          if-no-files-found: error
+          retention-days: 7
+
       - name: Upload run files as release assets
         if: github.ref_name == 'daily'
         uses: softprops/action-gh-release@v3
@@ -116,7 +125,7 @@ jobs:
           token: ${{ secrets.GITHUB_TOKEN }}
           body: |
              <p align="left">
-              <img src="https://img.shields.io/github/downloads/wkccd/CloudRunFilesBuilder/${{ env.tag_name }}/total?style=for-the-badge&label=%E4%BB%8A%E6%97%A5%E4%B8%8B%E8%BD%BD%E6%AC%A1%E6%95%B0&labelColor=427e25&color=black"/>
+              <img src="https://img.shields.io/github/downloads/beidouzhu2/it-s-cool/${{ env.tag_name }}/total?style=for-the-badge&label=%E4%BB%8A%E6%97%A5%E4%B8%8B%E8%BD%BD%E6%AC%A1%E6%95%B0&labelColor=427e25&color=black"/>
               <a href="https://wkdaily.cpolar.cn/archives/1">
                 <img src="https://img.shields.io/badge/可套用国内加速站下载-FC7C0D?logo=github&logoColor=fff&labelColor=000&style=for-the-badge"/>
               </a>
