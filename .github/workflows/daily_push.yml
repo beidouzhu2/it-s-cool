@@ -1,62 +1,49 @@
-name: 每周提取插件下载链接
+name: 每周分类推送插件下载链接
 
 on:
   schedule:
     - cron: '5 1 * * 1'
   workflow_dispatch:
+  push:
+    branches:
+      - 'test/full-weekly-push'
+    paths:
+      - '.github/workflows/daily_push.yml'
+      - 'scripts/weekly_push.py'
+  pull_request:
+    branches:
+      - daily
+    paths:
+      - '.github/workflows/daily_push.yml'
+      - 'scripts/weekly_push.py'
 
 permissions:
   contents: read
 
 jobs:
-  fetch_and_push:
+  verify:
+    if: github.event_name == 'push' || github.event_name == 'pull_request'
     runs-on: ubuntu-latest
-    if: github.ref_name == 'daily'
     steps:
-      - name: 提取 Release 链接并推送 Telegram
+      - uses: actions/checkout@v6
+        with:
+          persist-credentials: false
+      - name: Test categorization and real release lookup
         env:
+          GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+        run: |
+          python3 scripts/weekly_push.py --self-test
+          python3 scripts/weekly_push.py --dry-run
+  fetch_and_push:
+    if: github.ref_name == 'daily' && (github.event_name == 'schedule' || github.event_name == 'workflow_dispatch')
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v6
+        with:
+          persist-credentials: false
+      - name: 分类推送 Release 安装包链接
+        env:
+          GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
           TG_BOT_TOKEN: ${{ secrets.TG_BOT_TOKEN }}
           TG_CHAT_ID: ${{ secrets.TG_CHAT_ID }}
-        run: |
-          python3 - <<'PY'
-          import datetime, html, json, os, urllib.request, urllib.parse, urllib.error
-          from zoneinfo import ZoneInfo
-          tag = datetime.datetime.now(ZoneInfo("Asia/Shanghai")).strftime("%Y-%m-%d")
-          req = urllib.request.Request(
-              f"https://api.github.com/repos/{os.environ['GITHUB_REPOSITORY']}/releases/tags/{tag}",
-              headers={"Accept": "application/vnd.github+json", "User-Agent": "Bleki-build"})
-          try:
-              with urllib.request.urlopen(req, timeout=30) as response:
-                  assets = json.load(response).get("assets", [])
-          except urllib.error.HTTPError as exc:
-              if exc.code == 404:
-                  print("No release for today"); raise SystemExit(0)
-              raise
-          if not assets:
-              print("No assets for today"); raise SystemExit(0)
-          header = f"⭐️ <b>iStoreOS👉插件每周更新✨By Bleki</b>\n<b>日期：</b> {tag}\n\n"
-          chunks, chunk = [], header
-          for asset in assets:
-              name = asset["name"]
-              if not name.endswith(".run"):
-                  continue
-              low = name.lower()
-              label = next((t for t in ("passwall2","passwall","openclash","adguardhome","ssrp","ssrplus") if t in low), name)
-              arch = next((v for k,v in (("aarch32","Arm32"),("armv7","Arm32"),("aarch64","Arm64"),("arm64","Arm64"),("x86","x86")) if k in low), "")
-              line = f"♦️ <b>{html.escape(label)}插件{(' ('+arch+'架构)') if arch else ''}：</b>\n{html.escape(asset['browser_download_url'])}\n\n"
-              if len((chunk + line).encode("utf-16-le")) // 2 > 3800:
-                  chunks.append(chunk); chunk = header
-              chunk += line
-          if chunk != header:
-              chunks.append(chunk)
-          for msg in chunks:
-              data = urllib.parse.urlencode({"chat_id": os.environ["TG_CHAT_ID"], "text": msg, "parse_mode": "HTML", "disable_web_page_preview": "true"}).encode()
-              try:
-                  with urllib.request.urlopen(f"https://api.telegram.org/bot{os.environ['TG_BOT_TOKEN']}/sendMessage", data=data, timeout=30) as response:
-                      result = json.load(response)
-              except (urllib.error.URLError, TimeoutError):
-                  raise SystemExit("Telegram request failed")
-              if not result.get("ok"):
-                  raise SystemExit("Telegram rejected message")
-          print(f"Sent {len(chunks)} message(s)")
-          PY
+        run: python3 scripts/weekly_push.py
