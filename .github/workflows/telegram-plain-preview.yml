@@ -1,0 +1,23 @@
+name: One-time plain filename Telegram preview
+on:
+  push:
+    branches:
+      - 'test/telegram-plain-preview'
+    paths:
+      - '.github/workflows/telegram-plain-preview.yml'
+permissions:
+  contents: read
+jobs:
+  preview:
+    runs-on: ubuntu-latest
+    if: github.ref_name == 'test/telegram-plain-preview'
+    steps:
+      - uses: actions/checkout@v6
+        with:
+          persist-credentials: false
+      - name: Send current release links with plain filenames
+        env:
+          GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+          TG_BOT_TOKEN: ${{ secrets.TG_BOT_TOKEN }}
+          TG_CHAT_ID: ${{ secrets.TG_CHAT_ID }}
+        run: python3 scripts/weekly_push.py
