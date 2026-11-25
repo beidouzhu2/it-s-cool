@@ -9,6 +9,8 @@
 name: Build 25.12 nikki
 
 on:
+  schedule:
+    - cron: '40 21 * * 0' # Monday morning, Beijing time
   workflow_dispatch:
 
 permissions:

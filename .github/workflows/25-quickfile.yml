@@ -10,6 +10,8 @@
 name: Build 25.12 quickfile
 
 on:
+  schedule:
+    - cron: '50 21 * * 0' # Monday morning, Beijing time
   workflow_dispatch:
 
 permissions:

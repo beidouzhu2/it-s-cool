@@ -8,6 +8,8 @@
 name: Build 25.12 Argon
 
 on:
+  schedule:
+    - cron: '10 21 * * 0' # Monday morning, Beijing time
   workflow_dispatch:
 
 permissions:

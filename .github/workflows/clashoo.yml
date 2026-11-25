@@ -10,6 +10,8 @@
 name: Build 24.10 clashoo
 
 on:
+  schedule:
+    - cron: '25 22 * * 0' # Monday morning, Beijing time
   workflow_dispatch:
 
 permissions:
