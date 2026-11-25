@@ -102,7 +102,7 @@ def render(today, found):
             name = html.escape(a["name"])
             url = html.escape(a["browser_download_url"], quote=True)
             stamp = date if date == today.isoformat() else date + "（历史构建）"
-            line = f"♦️ <b>{name}</b>\n{html.escape(arch(a['name']))} · {html.escape(source)} · {stamp}\n<a href=\"{url}\">点击下载 .run</a>\n\n"
+            line = f"♦️ <code>{name}</code>\n{html.escape(arch(a['name']))} · {html.escape(source)} · {stamp}\n<a href=\"{url}\">点击下载 .run</a>\n\n"
             if units(header + line) > LIMIT:
                 raise RuntimeError("Asset entry too long")
             if units(chunk + line) > LIMIT:
@@ -141,6 +141,9 @@ def self_test():
     assert len(msgs) > 3 and all(units(m) <= LIMIT for m in msgs)
     assert any("历史构建" in m and "25-openclash" in m for m in msgs)
     assert any("Cortex-A53" in m for m in msgs)
+    assert any("<code>openclash-x86-64.run</code>" in m for m in msgs)
+    assert any('">点击下载 .run</a>' in m for m in msgs)
+    assert not any("<b>openclash-x86-64.run</b>" in m for m in msgs)
     assert len(render(today, collect(today, lambda _: []))) == 3
     print("Classification, date fallback, missing-family notices and message chunking passed")
 
