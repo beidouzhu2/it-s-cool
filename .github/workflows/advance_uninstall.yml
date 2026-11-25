@@ -5,13 +5,16 @@ on:
     - cron: "0 22 * * *"  # UTC 22:00 = 北京时间 06:00
   workflow_dispatch:
 
+permissions:
+  contents: write
+
 jobs:
   transfer:
     runs-on: ubuntu-22.04
 
     steps:
       - name: Checkout Repo
-        uses: actions/checkout@v4
+        uses: actions/checkout@v6
 
       - name: Download run file
         run: |
@@ -41,8 +44,19 @@ jobs:
           TODAY=$(date -u -d '+8 hour' +'%Y-%m-%d')
           echo "tag_name=$TODAY" >> $GITHUB_ENV
           
+      - name: Upload test artifact
+        if: github.ref_name != 'daily'
+        uses: actions/upload-artifact@v4
+        with:
+          name: test-advance_uninstall
+          path: |
+            luci-app-uninstall*.run
+          if-no-files-found: error
+          retention-days: 7
+
       - name: Upload run files as release assets
-        uses: softprops/action-gh-release@v2.1.0
+        if: github.ref_name == 'daily'
+        uses: softprops/action-gh-release@v3
         with:
           tag_name: ${{ env.tag_name }}
           name: "Daily Build - ${{ env.tag_name }}"
@@ -51,7 +65,7 @@ jobs:
           token: ${{ secrets.GITHUB_TOKEN }}
           body: |
              <p align="left">
-              <img src="https://img.shields.io/github/downloads/wkccd/CloudRunFilesBuilder/${{ env.tag_name }}/total?style=for-the-badge&label=%E4%BB%8A%E6%97%A5%E4%B8%8B%E8%BD%BD%E6%AC%A1%E6%95%B0&labelColor=427e25&color=black"/>
+              <img src="https://img.shields.io/github/downloads/beidouzhu2/it-s-cool/${{ env.tag_name }}/total?style=for-the-badge&label=%E4%BB%8A%E6%97%A5%E4%B8%8B%E8%BD%BD%E6%AC%A1%E6%95%B0&labelColor=427e25&color=black"/>
               <a href="https://wkdaily.cpolar.cn/archives/1">
                 <img src="https://img.shields.io/badge/可套用国内加速站下载-FC7C0D?logo=github&logoColor=fff&labelColor=000&style=for-the-badge"/>
               </a>
