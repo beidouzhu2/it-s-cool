@@ -9,6 +9,11 @@
 name: Make Passwall run files
 
 on:
+  push:
+    branches:
+      - 'test/dailybuild-migration'
+    paths:
+      - '.github/workflows/main.yml'
   schedule:
     - cron: "3 22 * * *"  # 北京时间早上 6 点 03
   workflow_dispatch:

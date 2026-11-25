@@ -9,6 +9,11 @@
 name: Make OpenClash run files 
 
 on:
+  push:
+    branches:
+      - 'test/dailybuild-migration'
+    paths:
+      - '.github/workflows/oc.yml'
   schedule:
     - cron: "8 22 * * *"  # 北京时间早上 6 点 08
   workflow_dispatch:

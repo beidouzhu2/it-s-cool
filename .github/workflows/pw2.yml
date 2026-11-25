@@ -9,6 +9,11 @@
 name: NEW Make Passwall2 run files
 
 on:
+  push:
+    branches:
+      - 'test/dailybuild-migration'
+    paths:
+      - '.github/workflows/pw2.yml'
   schedule:
     - cron: "0 22 * * *"  # 北京时间早上 6 点
   workflow_dispatch:
