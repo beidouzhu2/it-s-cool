@@ -1,0 +1,58 @@
+name: Check dailybuild upstream updates
+
+on:
+  schedule:
+    - cron: '30 20 * * *'
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+concurrency:
+  group: dailybuild-upstream-check
+  cancel-in-progress: false
+
+jobs:
+  check:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v6
+        with:
+          persist-credentials: false
+      - name: Compare upstream source without executing it
+        id: compare
+        shell: bash
+        run: |
+          set -euo pipefail
+          base=$(tr -d '[:space:]' < .upstream/dailybuild.sha)
+          [[ "$base" =~ ^[0-9a-f]{40}$ ]]
+          remote=https://github.com/wkccd/dailybuild.git
+          latest=$(git ls-remote "$remote" refs/heads/main | cut -f1)
+          [[ "$latest" =~ ^[0-9a-f]{40}$ ]]
+          echo "Baseline: $base" >> "$GITHUB_STEP_SUMMARY"
+          echo "Latest: $latest" >> "$GITHUB_STEP_SUMMARY"
+          echo "changed=false" >> "$GITHUB_OUTPUT"
+          if [[ "$base" == "$latest" ]]; then
+            echo "Already tracking the current upstream snapshot." >> "$GITHUB_STEP_SUMMARY"
+            exit 0
+          fi
+          mkdir -p "$RUNNER_TEMP/upstream-diff"
+          git init -q "$RUNNER_TEMP/upstream-git"
+          git -C "$RUNNER_TEMP/upstream-git" fetch --no-tags --depth=1 "$remote" "$base" "$latest"
+          git -C "$RUNNER_TEMP/upstream-git" diff --no-ext-diff "$base" "$latest" -- .github/workflows shell info > "$RUNNER_TEMP/upstream-diff/changes.patch"
+          git -C "$RUNNER_TEMP/upstream-git" diff --stat "$base" "$latest" -- .github/workflows shell info > "$RUNNER_TEMP/upstream-diff/stat.txt"
+          if [[ ! -s "$RUNNER_TEMP/upstream-diff/changes.patch" ]]; then
+            echo "No build-related file changes." >> "$GITHUB_STEP_SUMMARY"
+            exit 0
+          fi
+          echo "changed=true" >> "$GITHUB_OUTPUT"
+          echo "Upstream build changes require review; no repository code was changed." >> "$GITHUB_STEP_SUMMARY"
+          echo "https://github.com/wkccd/dailybuild/compare/$base...$latest" >> "$GITHUB_STEP_SUMMARY"
+          cat "$RUNNER_TEMP/upstream-diff/stat.txt" >> "$GITHUB_STEP_SUMMARY"
+          echo "::warning::Upstream build changes detected; review the patch artifact before migrating."
+      - uses: actions/upload-artifact@v4
+        if: steps.compare.outputs.changed == 'true'
+        with:
+          name: dailybuild-upstream-diff
+          path: ${{ runner.temp }}/upstream-diff/
+          retention-days: 14

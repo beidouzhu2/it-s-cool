@@ -1,5 +1,5 @@
 #=================================================
-# https://github.com/wukongdaily/RunFilesBuilder
+# https://github.com/wkccd/dailybuild
 # Description: Build RunFiles using GitHub Actions
 # Lisence: MIT
 # Author: wukongdaily
@@ -9,9 +9,17 @@
 name: NEW Make Passwall2 run files
 
 on:
+  push:
+    branches:
+      - 'test/dailybuild-migration'
+    paths:
+      - '.github/workflows/pw2.yml'
   schedule:
     - cron: "0 22 * * *"  # 北京时间早上 6 点
   workflow_dispatch:
+
+permissions:
+  contents: write
 
 jobs:
   build:
@@ -19,7 +27,7 @@ jobs:
 
     steps:
       - name: Checkout repository
-        uses: actions/checkout@v3
+        uses: actions/checkout@v6
       
       - name: Fetch latest release tag from Passwall2
         id: fetch_latest_tag
@@ -130,8 +138,18 @@ jobs:
           TODAY=$(date -u -d '+8 hour' +'%Y-%m-%d')
           echo "tag_name=$TODAY" >> $GITHUB_ENV
           
+      - name: Upload test artifact
+        if: github.ref_name != 'daily'
+        uses: actions/upload-artifact@v4
+        with:
+          name: test-pw2
+          path: makeself/*.run
+          if-no-files-found: error
+          retention-days: 7
+
       - name: Upload run files as release assets
-        uses: softprops/action-gh-release@v2.1.0
+        if: github.ref_name == 'daily'
+        uses: softprops/action-gh-release@v3
         with:
           tag_name: ${{ env.tag_name }}
           name: "Daily Build - ${{ env.tag_name }}"

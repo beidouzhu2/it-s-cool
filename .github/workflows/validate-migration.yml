@@ -1,0 +1,38 @@
+name: Validate build workflows
+
+on:
+  push:
+    branches:
+      - 'test/dailybuild-migration'
+    paths:
+      - '.github/workflows/**'
+      - 'shell/**'
+      - '.upstream/**'
+  pull_request:
+    branches:
+      - daily
+    paths:
+      - '.github/workflows/**'
+      - 'shell/**'
+      - '.upstream/**'
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+jobs:
+  validate:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v6
+        with:
+          persist-credentials: false
+      - name: Check workflow syntax
+        run: |
+          docker run --rm -v "$PWD:/repo" -w /repo rhysd/actionlint:1.7.7 -color -shellcheck= -pyflakes=
+      - name: Check shell syntax without running scripts
+        run: |
+          set -e
+          for f in shell/*.sh; do
+            bash -n "$f"
+          done

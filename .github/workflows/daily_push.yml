@@ -3,60 +3,60 @@ name: 每周提取插件下载链接
 on:
   schedule:
     - cron: '5 1 * * 1'
-  workflow_dispatch: 
+  workflow_dispatch:
+
+permissions:
+  contents: read
 
 jobs:
   fetch_and_push:
     runs-on: ubuntu-latest
+    if: github.ref_name == 'daily'
     steps:
-      - name: 提取 Release 链接与标题
-        id: get_data
+      - name: 提取 Release 链接并推送 Telegram
+        env:
+          TG_BOT_TOKEN: ${{ secrets.TG_BOT_TOKEN }}
+          TG_CHAT_ID: ${{ secrets.TG_CHAT_ID }}
         run: |
-          TAG_DATE=$(TZ='Asia/Shanghai' date +'%Y-%m-%d')
-          REPO="beidouzhu2/it-s-cool"
-          RESPONSE=$(curl -s "https://api.github.com/repos/$REPO/releases/tags/$TAG_DATE")
-          CHECK_EXIST=$(echo "$RESPONSE" | jq -r '.message // empty')
-          
-          if [ "$CHECK_EXIST" == "Not Found" ]; then
-            echo "found=false" >> $GITHUB_OUTPUT
-          else
-            echo "found=true" >> $GITHUB_OUTPUT
-            echo "tag=$TAG_DATE" >> $GITHUB_OUTPUT
-            
-            {
-              echo "content<<EOF"
-              echo "$RESPONSE" | jq -r '
-                .assets[] | 
-                .name as $n | .browser_download_url as $u |
-                # 判断插件名
-                (if $n | contains("passwall2") then "passwall2"
-                 elif $n | contains("passwall") then "passwall"
-                 elif $n | contains("openclash") then "openclash"
-                 elif $n | contains("AdGuardHome") then "AdGuardHome"
-                 elif $n | contains("ssrp") then "ssrp"
-                 elif $n | contains("ssrplus") then "ssrplus"
-                 else $n end) as $t |
-                # 判断架构名
-                (if $n | contains("aarch32") then " (Arm32架构)"
-                 elif $n | contains("aarch64") then " (Arm64架构)"
-                 elif $n | contains("x86") then " (x86架构)"
-                 else "" end) as $a |
-                "♦️ <b>\($t)插件\($a)：</b>\n\($u)\n"
-              '
-              echo "EOF"
-            } >> $GITHUB_OUTPUT
-          fi
-
-      - name: 推送到 Telegram
-        if: steps.get_data.outputs.found == 'true'
-        run: |
-          TEXT="⭐️ <b>iStoreOS👉插件每周更新✨By Bleki</b>
-            <b>                日期：</b> ${{ steps.get_data.outputs.tag }}
-          
-          ${{ steps.get_data.outputs.content }}"
-          
-          curl -s -X POST "https://api.telegram.org/bot${{ secrets.TG_BOT_TOKEN }}/sendMessage" \
-            -d "chat_id=${{ secrets.TG_CHAT_ID }}" \
-            --data-urlencode "text=$TEXT" \
-            -d "parse_mode=HTML" \
-            -d "disable_web_page_preview=true"
+          python3 - <<'PY'
+          import datetime, html, json, os, urllib.request, urllib.parse, urllib.error
+          from zoneinfo import ZoneInfo
+          tag = datetime.datetime.now(ZoneInfo("Asia/Shanghai")).strftime("%Y-%m-%d")
+          req = urllib.request.Request(
+              f"https://api.github.com/repos/{os.environ['GITHUB_REPOSITORY']}/releases/tags/{tag}",
+              headers={"Accept": "application/vnd.github+json", "User-Agent": "Bleki-build"})
+          try:
+              with urllib.request.urlopen(req, timeout=30) as response:
+                  assets = json.load(response).get("assets", [])
+          except urllib.error.HTTPError as exc:
+              if exc.code == 404:
+                  print("No release for today"); raise SystemExit(0)
+              raise
+          if not assets:
+              print("No assets for today"); raise SystemExit(0)
+          header = f"⭐️ <b>iStoreOS👉插件每周更新✨By Bleki</b>\n<b>日期：</b> {tag}\n\n"
+          chunks, chunk = [], header
+          for asset in assets:
+              name = asset["name"]
+              if not name.endswith(".run"):
+                  continue
+              low = name.lower()
+              label = next((t for t in ("passwall2","passwall","openclash","adguardhome","ssrp","ssrplus") if t in low), name)
+              arch = next((v for k,v in (("aarch32","Arm32"),("armv7","Arm32"),("aarch64","Arm64"),("arm64","Arm64"),("x86","x86")) if k in low), "")
+              line = f"♦️ <b>{html.escape(label)}插件{(' ('+arch+'架构)') if arch else ''}：</b>\n{html.escape(asset['browser_download_url'])}\n\n"
+              if len((chunk + line).encode("utf-16-le")) // 2 > 3800:
+                  chunks.append(chunk); chunk = header
+              chunk += line
+          if chunk != header:
+              chunks.append(chunk)
+          for msg in chunks:
+              data = urllib.parse.urlencode({"chat_id": os.environ["TG_CHAT_ID"], "text": msg, "parse_mode": "HTML", "disable_web_page_preview": "true"}).encode()
+              try:
+                  with urllib.request.urlopen(f"https://api.telegram.org/bot{os.environ['TG_BOT_TOKEN']}/sendMessage", data=data, timeout=30) as response:
+                      result = json.load(response)
+              except (urllib.error.URLError, TimeoutError):
+                  raise SystemExit("Telegram request failed")
+              if not result.get("ok"):
+                  raise SystemExit("Telegram rejected message")
+          print(f"Sent {len(chunks)} message(s)")
+          PY

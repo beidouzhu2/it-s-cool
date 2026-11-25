@@ -1,0 +1,48 @@
+name: Build selected plugin family
+
+on:
+  workflow_dispatch:
+    inputs:
+      family:
+        description: 'Choose package family; never runs cleanup or Telegram'
+        required: true
+        type: choice
+        options:
+          - '24.10'
+          - '25.12'
+          - 'both'
+          - 'core'
+
+permissions:
+  actions: write
+  contents: read
+
+jobs:
+  dispatch:
+    runs-on: ubuntu-latest
+    if: github.ref_name == 'daily' || github.ref_name == 'test/dailybuild-migration'
+    steps:
+      - name: Dispatch allowlisted build workflows
+        env:
+          GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+          FAMILY: ${{ inputs.family }}
+        shell: bash
+        run: |
+          set -euo pipefail
+          v24=(adguardhome advance_uninstall argon dae dufs homeproxy main momo mosdns nikki oc openlist2 pw2 ssrp store 24-quickfile openwrt-daede singbox clashoo)
+          v25=(25-nikki 25-openwrt-daede 25-quickfile 25-singbox argon25 mosdns25 oc25 pw2-25 ssrp25 store25 build-pw)
+          case "$FAMILY" in
+            24.10) builds=("${v24[@]}");;
+            25.12) builds=("${v25[@]}");;
+            both) builds=("${v24[@]}" "${v25[@]}");;
+            core) builds=(xray-core);;
+            *) exit 1;;
+          esac
+          failed=0
+          for name in "${builds[@]}"; do
+            if ! gh workflow run "$name.yml" --repo "$GITHUB_REPOSITORY" --ref "$GITHUB_REF_NAME"; then
+              echo "::error::Dispatch failed: $name"
+              failed=1
+            fi
+          done
+          exit "$failed"

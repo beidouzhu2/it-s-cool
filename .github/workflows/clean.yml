@@ -14,6 +14,7 @@ on:
 
 jobs:
   cleanup:
+    if: github.ref_name == 'daily'
     runs-on: ubuntu-latest
     permissions:
       actions: write
@@ -25,13 +26,14 @@ jobs:
           KEEP_DAYS: ${{ github.event.inputs.keep_days }}
         run: |
           : "${KEEP_DAYS:=1}"
+          [[ "$KEEP_DAYS" =~ ^[1-9][0-9]*$ ]] || { echo "Invalid keep_days"; exit 1; }
           THRESHOLD="$(date -u -d "${KEEP_DAYS} days ago" '+%Y-%m-%dT%H:%M:%SZ')"
           echo "阈值时间(UTC)：$THRESHOLD"
 
           RUN_IDS=$(gh api -X GET "repos/${GITHUB_REPOSITORY}/actions/runs" \
                     --paginate -F per_page=100 \
                     --jq '.workflow_runs[]
-                          | select(.status=="completed" and .created_at < "'"$THRESHOLD"'")
+                          | select(.head_branch=="daily" and .status=="completed" and .created_at < "'"$THRESHOLD"'")
                           | .id')
 
           if [ -z "$RUN_IDS" ]; then

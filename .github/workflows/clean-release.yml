@@ -10,6 +10,7 @@ on:
 
 jobs:
   cleanup_releases:
+    if: github.ref_name == 'daily'
     runs-on: ubuntu-latest
     permissions:
       contents: write
@@ -23,14 +24,15 @@ jobs:
           set -euo pipefail
           export LANG=C.UTF-8
           export LC_ALL=C.UTF-8
-          KEEP_DAYS=3   # ✅ 增加默认值
+          : "${KEEP_DAYS:=3}"
+          [[ "$KEEP_DAYS" =~ ^[1-9][0-9]*$ ]] || { echo "Invalid keep_days"; exit 1; }
 
           THRESHOLD="$(date -u -d "${KEEP_DAYS} days ago" '+%Y-%m-%dT%H:%M:%SZ')"
           echo "Threshold time (UTC): $THRESHOLD"
 
           # 一次性拉取所有超出阈值的 release 所需字段（id、name、tag_name）
           TO_DELETE="$(gh api --paginate "repos/${GITHUB_REPOSITORY}/releases" \
-            --jq '.[] | select(.created_at < "'"$THRESHOLD"'") | [.id, (.name // ""), (.tag_name // "")] | @tsv' || true)"
+            --jq '.[] | select((.tag_name | test("^[0-9]{4}-[0-9]{2}-[0-9]{2}$")) and .created_at < "'"$THRESHOLD"'") | [.id, (.name // ""), (.tag_name // "")] | @tsv' || true)"
 
           if [ -z "$TO_DELETE" ]; then
             echo "✅ No releases to delete"
@@ -44,9 +46,10 @@ jobs:
           # 逐行读入：ID \t NAME \t TAG_NAME
           printf '%s\n' "$TO_DELETE" | while IFS=$'\t' read -r ID NAME TAG_NAME; do
             echo "🗑 Deleting Release: ${NAME:-<no name>} (ID: $ID)"
-            gh api -X DELETE "repos/${GITHUB_REPOSITORY}/releases/${ID}" || {
-              echo "⚠️ Failed to delete Release: $ID (continue)"; 
-            }
+            if ! gh api -X DELETE "repos/${GITHUB_REPOSITORY}/releases/${ID}"; then
+              echo "⚠️ Failed to delete Release: $ID (continue)"
+              continue
+            fi
 
             if [ -n "${TAG_NAME:-}" ] && [ "$TAG_NAME" != "null" ]; then
               echo "🗑 Deleting Tag: $TAG_NAME"
