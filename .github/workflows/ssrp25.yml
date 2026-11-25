@@ -4,6 +4,8 @@ permissions:
   contents: write
 
 on:
+  schedule:
+    - cron: '30 21 * * 0' # Monday morning, Beijing time
   workflow_dispatch:
 
 jobs:

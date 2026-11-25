@@ -10,6 +10,8 @@
 name: Build 25.12 sing-box core
 
 on:
+  schedule:
+    - cron: '55 21 * * 0' # Monday morning, Beijing time
   workflow_dispatch:
 
 permissions:

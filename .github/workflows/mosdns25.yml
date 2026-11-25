@@ -9,6 +9,8 @@
 name: Build 25.12 MosDNS
 
 on:
+  schedule:
+    - cron: '15 21 * * 0' # Monday morning, Beijing time
   workflow_dispatch:
 
 permissions:

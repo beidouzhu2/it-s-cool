@@ -10,6 +10,8 @@
 name: Build 25.12 openwrt-daede
 
 on:
+  schedule:
+    - cron: '45 21 * * 0' # Monday morning, Beijing time
   workflow_dispatch:
 
 permissions:

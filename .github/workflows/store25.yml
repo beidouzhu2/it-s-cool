@@ -8,6 +8,8 @@
 name: Build 25.12 iStore
 
 on:
+  schedule:
+    - cron: '35 21 * * 0' # Monday morning, Beijing time
   workflow_dispatch:
 
 permissions:

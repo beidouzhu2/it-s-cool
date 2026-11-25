@@ -9,6 +9,8 @@
 name: Build 25.12 OpenClash
 
 on:
+  schedule:
+    - cron: '20 21 * * 0' # Monday morning, Beijing time
   workflow_dispatch:
 
 permissions:
